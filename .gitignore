@@ -1,0 +1,9 @@
+node_modules/
+data/
+.env
+
+# Binaires et rapports générés par l'outil en ligne de commande
+*.exe
+gitanalyze
+gitanalyze_*.html
+*.json.tmp

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analyse · GitAnalyze</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Cg fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round'%3E%3Ccircle cx='10' cy='9' r='3'/%3E%3Ccircle cx='10' cy='23' r='3'/%3E%3Ccircle cx='22' cy='13' r='3'/%3E%3Cpath d='M10 12v8M22 16c0 4-4 5-12 6'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <nav class="topbar">
+    <a class="brand" href="/">
+      <span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="9" r="2.5"/><path d="M6 8.5v7M18 11.5c0 3-3 4-9.5 5"/></svg></span>
+      GitAnalyze
+    </a>
+    <span class="spacer"></span>
+    <form class="mini-search" id="miniForm" autocomplete="off">
+      <input id="miniRepo" placeholder="Analyser un autre dépôt…" spellcheck="false" aria-label="Adresse d'un autre dépôt">
+      <button type="submit">Analyser</button>
+    </form>
+    <button class="icon-btn" id="themeBtn" title="Changer de thème">◐ <span id="themeLabel">Auto</span></button>
+  </nav>
+
+  <!-- Progression de l'analyse -->
+  <section class="progress-card" id="progressView">
+    <h2 id="pName">Préparation…</h2>
+    <div class="pk" id="pKey"></div>
+    <div class="bar indeterminate" id="pBar"><div></div></div>
+    <div class="progress-msg"><span id="pMsg">Envoi de la demande…</span><span id="pTime"></span></div>
+    <ol class="steps" id="pSteps">
+      <li data-s="queued"><span class="si"></span>Mise en file d'attente</li>
+      <li data-s="clone"><span class="si"></span>Clonage du dépôt</li>
+      <li data-s="history"><span class="si"></span>Lecture de l'historique</li>
+      <li data-s="files"><span class="si"></span>Analyse des fichiers</li>
+    </ol>
+    <div class="error-box" id="pError" hidden></div>
+    <div class="actions" id="pActions" hidden>
+      <button class="btn" id="retryBtn">Réessayer</button>
+      <a class="icon-btn" href="/">← Retour à l'accueil</a>
+    </div>
+  </section>
+
+  <!-- Tableau de bord -->
+  <div id="dashView" hidden>
+    <header class="dash-header">
+      <div style="min-width:0">
+        <div class="title">
+          <span class="logo lg"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5a2 2 0 0 1 2-2h12v14H6a2 2 0 0 0-2 2zm0 0a2 2 0 0 0 2 2h12"/></svg></span>
+          <div style="min-width:0">
+            <h1 id="repoName">Dépôt</h1>
+            <div class="subtitle" id="repoUrl"></div>
+          </div>
+        </div>
+        <div class="meta" id="meta"></div>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="refreshBtn" title="Relancer l'analyse avec les derniers commits">↻ Ré-analyser</button>
+        <button class="icon-btn" id="exportBtn" title="Télécharger les données brutes">⤓ JSON</button>
+      </div>
+    </header>
+
+    <div class="filters">
+      <div class="seg" id="presets">
+        <button data-p="all" class="on">Tout</button>
+        <button data-p="365">1 an</button>
+        <button data-p="182">6 mois</button>
+        <button data-p="91">3 mois</button>
+        <button data-p="30">30 jours</button>
+      </div>
+      <div class="field"><label for="from">Du</label><input type="date" id="from"></div>
+      <div class="field"><label for="to">au</label><input type="date" id="to"></div>
+      <div class="field" style="width:220px"><label for="authorInput">Auteur</label><input id="authorInput" list="authorList" placeholder="Filtrer…" style="width:100%"></div>
+      <datalist id="authorList"></datalist>
+      <span id="authorChip"></span>
+      <label class="check"><input type="checkbox" id="merges" checked> Inclure les merges</label>
+      <span class="spacer"></span>
+      <span class="count-note" id="countNote"></span>
+    </div>
+
+    <div class="banner" id="offline" hidden>Les graphiques n'ont pas pu être chargés (cdn.jsdelivr.net inaccessible). Les tableaux et indicateurs restent disponibles.</div>
+
+    <div class="grid">
+      <div class="kpis" id="kpis"></div>
+
+      <div class="card c12">
+        <div class="card-head">
+          <div><h2>Commits dans le temps</h2><p class="hint">Cliquez sur une barre pour zoomer sur cette période.</p></div>
+          <div class="seg" id="gran">
+            <button data-g="auto" class="on">Auto</button><button data-g="day">Jour</button><button data-g="week">Semaine</button><button data-g="month">Mois</button>
+          </div>
+        </div>
+        <div class="chart tall"><canvas id="timeline" role="img" aria-label="Nombre de commits par période"></canvas></div>
+      </div>
+
+      <div class="card c12">
+        <h2>Lignes ajoutées et supprimées</h2>
+        <p class="hint"><span class="sw" style="background:var(--add)"></span>Ajouts au-dessus de l'axe · <span class="sw" style="background:var(--del)"></span>suppressions en dessous</p>
+        <div class="chart"><canvas id="churnChart" role="img" aria-label="Lignes ajoutées et supprimées par période"></canvas></div>
+      </div>
+
+      <div class="card c7">
+        <div class="card-head">
+          <div><h2>Contributeurs</h2><p class="hint">Cliquez sur une ligne pour filtrer · cliquez sur un en-tête pour trier.</p></div>
+          <div class="field search"><input id="authorSearch" placeholder="Rechercher…" style="width:100%" aria-label="Rechercher un contributeur"></div>
+        </div>
+        <div class="table-wrap"><table id="authorsTable"></table></div>
+      </div>
+
+      <div class="card c5">
+        <h2>Répartition des commits</h2>
+        <p class="hint">Top 7 des auteurs sur la période, le reste regroupé.</p>
+        <div class="chart"><canvas id="authorsChart" role="img" aria-label="Répartition des commits par auteur"></canvas></div>
+        <dl class="stats-list" id="authorStats"></dl>
+      </div>
+
+      <div class="card c4">
+        <h2>Jour de la semaine</h2>
+        <p class="hint" id="weekendNote"></p>
+        <div class="chart short"><canvas id="weekday" role="img" aria-label="Commits par jour de la semaine"></canvas></div>
+      </div>
+      <div class="card c4">
+        <h2>Heure de la journée</h2>
+        <p class="hint">Fuseau horaire de chaque auteur.</p>
+        <div class="chart short"><canvas id="hour" role="img" aria-label="Commits par heure"></canvas></div>
+      </div>
+      <div class="card c4">
+        <h2>Jour × heure</h2>
+        <p class="hint">Intensité des commits.</p>
+        <div class="heat" id="heat"></div>
+        <div class="legend-scale">moins <i style="background:var(--h1)"></i><i style="background:var(--h2)"></i><i style="background:var(--h3)"></i><i style="background:var(--h4)"></i><i style="background:var(--h5)"></i> plus</div>
+      </div>
+
+      <div class="card c5">
+        <h2>Types de commits</h2>
+        <p class="hint" id="convNote"></p>
+        <div class="chart"><canvas id="types" role="img" aria-label="Commits par type"></canvas></div>
+      </div>
+      <div class="card c7">
+        <h2>Plus gros commits</h2>
+        <p class="hint">Classés par nombre de lignes modifiées.</p>
+        <div class="table-wrap"><table id="bigCommits"></table></div>
+      </div>
+
+      <div class="section-title">État actuel du code <span>(branche principale, indépendant des filtres)</span></div>
+
+      <div class="card c6">
+        <h2>Langages</h2>
+        <p class="hint" id="langNote"></p>
+        <div class="langbar" id="langBar"></div>
+        <div class="table-wrap" style="max-height:340px"><table id="langTable"></table></div>
+      </div>
+      <div class="card c6">
+        <h2>Plus gros fichiers</h2>
+        <p class="hint">En nombre de lignes.</p>
+        <div class="table-wrap" style="max-height:400px"><table id="bigFiles"></table></div>
+      </div>
+      <div class="card c12">
+        <h2>Fichiers les plus modifiés</h2>
+        <p class="hint" id="churnNote"></p>
+        <div class="table-wrap"><table id="churnTable"></table></div>
+      </div>
+    </div>
+    <footer id="footer"></footer>
+  </div>
+</div>
+<div id="tip"></div>
+<script type="module" src="/js/report.js"></script>
+</body>
+</html>

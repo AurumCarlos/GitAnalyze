@@ -1,0 +1,23 @@
+{
+  "name": "gitanalyze",
+  "version": "1.0.0",
+  "description": "Collez l'adresse d'un dépôt git ou GitHub et obtenez un tableau de bord de statistiques.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/server.ts",
+    "dev": "node --watch src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -39,7 +39,9 @@ navigateur ──POST /api/analyses──▶ serveur Node ──git clone --bare
    public sur un hôte autorisé (pas de `file://`, pas d'IP ni de `localhost`,
    pas d'identifiants dans l'URL).
 2. **`src/analyze.ts`** clone le dépôt sans copie de travail, lit l'historique avec
-   `git log --numstat` et compte les lignes de HEAD via `git cat-file --batch`.
+   `git log --numstat` (réparti sur plusieurs processus git en parallèle) et compte
+   les lignes de HEAD via `git cat-file --batch`. Le clone est conservé : l'analyse
+   suivante fait un simple `git fetch` et ne lit que les nouveaux commits.
    git est lancé sans shell, sans invite de mot de passe et en HTTPS uniquement.
 3. **`src/jobs.ts`** gère la file d'attente (plusieurs visiteurs du même dépôt
    partagent une seule analyse) et le cache disque.
@@ -55,7 +57,9 @@ navigateur ──POST /api/analyses──▶ serveur Node ──git clone --bare
 | `HOST` | `127.0.0.1` | Interface d'écoute (`0.0.0.0` pour un serveur) |
 | `ALLOWED_HOSTS` | `github.com,gitlab.com,bitbucket.org,codeberg.org` | Hôtes git autorisés (`*` = tout hôte public) |
 | `MAX_CONCURRENT` | `2` | Analyses simultanées |
-| `CACHE_TTL_MS` | `21600000` (6 h) | Durée de réutilisation d'un rapport |
+| `CACHE_TTL_MS` | `3600000` (1 h) | Durée de réutilisation d'un rapport avant mise à jour |
+| `REPO_CACHE_MB` | `5000` | Place disque maximale des clones conservés (les plus anciens sont supprimés) |
+| `LOG_WORKERS` | nombre de cœurs (max 8) | Processus git en parallèle pour lire l'historique |
 | `CLONE_TIMEOUT_MS` | `600000` (10 min) | Délai maximal de clonage |
 | `RATE_LIMIT` | `20` | Analyses lancées par IP toutes les 10 minutes |
 | `DATA_DIR` | `data` | Dossier du cache |

@@ -20,6 +20,7 @@ import {
 import {
   dataPath, getJob, jobId, jobSummary, loadCache, recentAnalyses, startAnalysis, subscribe,
 } from './jobs.ts';
+import { killAllGit } from './git.ts';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const HOST = process.env.HOST ?? '127.0.0.1';
@@ -124,6 +125,13 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error(err);
   res.status(500).json({ error: 'Erreur interne du serveur.' });
 });
+
+// À l'arrêt (systemctl restart, Ctrl+C…), on arrête les clones en cours :
+// sinon ils continueraient à télécharger sans que personne n'utilise le résultat.
+for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP'] as const) {
+  process.on(signal, () => { killAllGit(); process.exit(0); });
+}
+process.on('exit', killAllGit);
 
 await loadCache();
 app.listen(PORT, HOST, () => {

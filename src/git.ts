@@ -22,8 +22,20 @@ const GIT_ENV: NodeJS.ProcessEnv = {
   LC_ALL: 'C',
 };
 
+/** Processus git en cours, arrêtés avec le serveur pour ne pas laisser d'orphelins. */
+const children = new Set<ChildProcessWithoutNullStreams>();
+
 export function gitSpawn(args: string[], cwd?: string): ChildProcessWithoutNullStreams {
-  return spawn('git', [...SAFE_CONFIG, ...args], { cwd, env: GIT_ENV, windowsHide: true });
+  const p = spawn('git', [...SAFE_CONFIG, ...args], { cwd, env: GIT_ENV, windowsHide: true });
+  children.add(p);
+  p.on('close', () => children.delete(p));
+  p.on('error', () => children.delete(p));
+  return p;
+}
+
+export function killAllGit() {
+  for (const p of children) p.kill('SIGKILL');
+  children.clear();
 }
 
 /** Exécute git et renvoie sa sortie standard complète. */

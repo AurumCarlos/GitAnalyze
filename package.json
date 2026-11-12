@@ -8,8 +8,8 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "start": "node src/server.ts",
-    "dev": "node --watch src/server.ts",
+    "start": "node --max-old-space-size=4096 src/server.ts",
+    "dev": "node --watch --max-old-space-size=4096 src/server.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

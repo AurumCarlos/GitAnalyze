@@ -16,7 +16,7 @@ import { mkdir, readdir, readFile, writeFile, rename, rm } from 'node:fs/promise
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { gunzip, gzip } from 'node:zlib';
-import { analyzeRepo, type HistoryState, type Stage } from './analyze.ts';
+import { analyzeRepo, type HistoryState, type Report, type Stage } from './analyze.ts';
 import { UserError, type RepoRef } from './repoUrl.ts';
 
 const gzipAsync = promisify(gzip);
@@ -27,7 +27,7 @@ export const CACHE_DIR = join(DATA_DIR, 'cache');
 const REPOS_DIR = join(DATA_DIR, 'repos');
 const MAX_CONCURRENT = Number(process.env.MAX_CONCURRENT ?? 2);
 const CACHE_TTL_MS = Number(process.env.CACHE_TTL_MS ?? 3600_000);
-const REPO_CACHE_BYTES = Number(process.env.REPO_CACHE_MB ?? 5000) * 1024 * 1024;
+const REPO_CACHE_BYTES = Number(process.env.REPO_CACHE_MB ?? 15000) * 1024 * 1024;
 
 export interface JobEvent {
   id: string;
@@ -73,23 +73,42 @@ async function writeAtomic(path: string, data: Buffer | string) {
   await rename(path + '.tmp', path);
 }
 
+const readGzJson = async <T>(path: string): Promise<T> =>
+  JSON.parse((await gunzipAsync(await readFile(path))).toString('utf8')) as T;
+
+/**
+ * L'état sauvegardé ne contient que ce qui manque au rapport (HEAD analysé et
+ * statistiques complètes par fichier) : commits et auteurs sont relus depuis
+ * le rapport, ce qui évite de les stocker deux fois (crucial pour les très
+ * gros dépôts comme Linux).
+ */
+type SavedState = Pick<HistoryState, 'headCommit' | 'churn'>;
+
 async function loadState(id: string): Promise<HistoryState | null> {
   try {
-    return JSON.parse((await gunzipAsync(await readFile(statePath(id)))).toString('utf8')) as HistoryState;
+    const [state, report] = await Promise.all([
+      readGzJson<SavedState>(statePath(id)),
+      readGzJson<Report>(dataPath(id)),
+    ]);
+    if (state.headCommit !== report.headCommit) return null;
+    return { headCommit: state.headCommit, churn: state.churn, authors: report.authors, commits: report.commits };
   } catch {
     return null;
   }
 }
 
-/** Supprime les clones les moins récemment analysés au-delà de REPO_CACHE_MB. */
+/**
+ * Supprime les clones les moins récemment analysés au-delà de REPO_CACHE_MB.
+ * Le plus récent est toujours gardé, même s'il dépasse la limite à lui seul.
+ */
 async function evictRepos() {
   const withRepo = [...jobs.values()]
     .filter(j => j.summary?.repoBytes && j.status !== 'running' && j.status !== 'queued')
     .sort((a, b) => b.summary!.finishedAt - a.summary!.finishedAt);
   let total = 0;
-  for (const j of withRepo) {
+  for (const [i, j] of withRepo.entries()) {
     total += j.summary!.repoBytes!;
-    if (total <= REPO_CACHE_BYTES) continue;
+    if (i === 0 || total <= REPO_CACHE_BYTES) continue;
     await rm(repoPath(j.id), { recursive: true, force: true, maxRetries: 3 }).catch(() => {});
     await rm(statePath(j.id), { force: true }).catch(() => {});
     j.summary!.repoBytes = 0;
@@ -110,6 +129,11 @@ function emit(j: Job) {
 /** Recharge les résumés des analyses déjà en cache au démarrage. */
 export async function loadCache(): Promise<void> {
   await mkdir(CACHE_DIR, { recursive: true });
+  await mkdir(REPOS_DIR, { recursive: true });
+  // Clones interrompus par un arrêt du serveur : inutilisables, on libère la place.
+  for (const f of await readdir(REPOS_DIR)) {
+    if (f.endsWith('.partial')) await rm(join(REPOS_DIR, f), { recursive: true, force: true, maxRetries: 3 }).catch(() => {});
+  }
   for (const f of await readdir(CACHE_DIR)) {
     if (!f.endsWith('.meta.json')) continue;
     try {
@@ -183,10 +207,9 @@ async function run(job: Job) {
     });
 
     job.stage = 'files'; job.percent = 100; job.message = 'Enregistrement du rapport…'; emit(job);
-    const [gz, stateGz] = await Promise.all([
-      gzipAsync(JSON.stringify(report)),
-      gzipAsync(JSON.stringify(state)),
-    ]);
+    const saved: SavedState = { headCommit: state.headCommit, churn: state.churn };
+    const gz = await gzipAsync(JSON.stringify(report));
+    const stateGz = await gzipAsync(JSON.stringify(saved));
     await writeAtomic(dataPath(job.id), gz);
     await writeAtomic(statePath(job.id), stateGz);
 

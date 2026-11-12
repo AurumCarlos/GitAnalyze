@@ -53,7 +53,8 @@ export interface HistoryState {
   churn: ChurnRow[]; // complet, pas seulement le top 100 du rapport
 }
 
-const CLONE_TIMEOUT_MS = Number(process.env.CLONE_TIMEOUT_MS ?? 10 * 60_000);
+/** Délai maximal de clonage / fetch. 0 (par défaut) = pas de limite. */
+const CLONE_TIMEOUT_MS = Number(process.env.CLONE_TIMEOUT_MS ?? 0);
 const LOG_WORKERS = Math.max(1, Number(process.env.LOG_WORKERS ?? Math.min(8, availableParallelism())));
 const MIN_COMMITS_PER_WORKER = 1500;
 const HISTORY_FORMAT = '--pretty=format:@@@%x1f%H%x1f%an%x1f%ae%x1f%at%x1f%ai%x1f%P%x1f%s';
@@ -171,7 +172,7 @@ function runTransfer(ref: RepoRef, args: string[], cwd: string | undefined, prog
     let tail = '';
     let last = -1;
     let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; p.kill(); }, CLONE_TIMEOUT_MS);
+    const timer = CLONE_TIMEOUT_MS > 0 ? setTimeout(() => { timedOut = true; p.kill(); }, CLONE_TIMEOUT_MS) : undefined;
 
     p.stdout.resume();
     p.stderr.setEncoding('utf8');

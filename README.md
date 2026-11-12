@@ -58,12 +58,27 @@ navigateur ──POST /api/analyses──▶ serveur Node ──git clone --bare
 | `ALLOWED_HOSTS` | `github.com,gitlab.com,bitbucket.org,codeberg.org` | Hôtes git autorisés (`*` = tout hôte public) |
 | `MAX_CONCURRENT` | `2` | Analyses simultanées |
 | `CACHE_TTL_MS` | `3600000` (1 h) | Durée de réutilisation d'un rapport avant mise à jour |
-| `REPO_CACHE_MB` | `5000` | Place disque maximale des clones conservés (les plus anciens sont supprimés) |
+| `REPO_CACHE_MB` | `15000` | Place disque maximale des clones conservés (les plus anciens sont supprimés, le dernier analysé est toujours gardé) |
 | `LOG_WORKERS` | nombre de cœurs (max 8) | Processus git en parallèle pour lire l'historique |
-| `CLONE_TIMEOUT_MS` | `600000` (10 min) | Délai maximal de clonage |
+| `CLONE_TIMEOUT_MS` | `0` (aucune limite) | Délai maximal de clonage |
 | `RATE_LIMIT` | `20` | Analyses lancées par IP toutes les 10 minutes |
 | `DATA_DIR` | `data` | Dossier du cache |
 | `TRUST_PROXY` | – | `1` derrière un reverse proxy (IP réelle pour la limite) |
+
+## Très gros dépôts
+
+Un dépôt comme `torvalds/linux` (≈ 1,3 million de commits, plus de 5 Go) est
+analysable, mais la première analyse prend du temps (de quelques dizaines de
+minutes à plusieurs heures selon le nombre de cœurs) et beaucoup de mémoire.
+L'analyse continue côté serveur même si l'onglet est fermé : il suffit de
+rouvrir le lien du rapport plus tard. Les mises à jour suivantes ne lisent que
+les nouveaux commits.
+
+Prévoyez au moins 4 Go de mémoire pour Node :
+
+```
+NODE_OPTIONS=--max-old-space-size=4096
+```
 
 ## Docker
 
